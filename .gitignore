@@ -37,7 +37,7 @@ slprj/
 *.slxc
 *.mexw64
 
-Datasets/
+/Datasets/
 !Datasets/**/.gitkeep
 
 # Artifacts & Experiments
