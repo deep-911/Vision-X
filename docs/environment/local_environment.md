@@ -12,8 +12,12 @@
 * **Dependency Manager**: pip 26.1.2
 
 ## Machine Learning Framework
-* **PyTorch Setup**: We are using the `cu124` (CUDA 12.4) build of PyTorch, which is compatible with the local driver (616.92) and CUDA 13.4 backend.
-* **Installation Source**: `https://download.pytorch.org/whl/cu124`
+* **PyTorch Setup**: We are using the `cu130` (CUDA 13.0) build of PyTorch, avoiding PyPI fallbacks to ensure CUDA compatibility.
+* **Versions**:
+  - `torch==2.14.0+cu130`
+  - `torchvision==0.29.0+cu130`
+  - `torchaudio==2.11.0+cu130`
+* **Installation Source**: `--index-url https://download.pytorch.org/whl/cu130`
 
 ## MATLAB/Simulink
 * **Version**: R2026a (Version 26.1)
