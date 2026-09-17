@@ -7,20 +7,21 @@ def calculate_classification_metrics(y_true, y_pred_probs):
     # 5-class metrics
     acc = accuracy_score(y_true, y_pred)
     bacc = balanced_accuracy_score(y_true, y_pred)
-    macro_f1 = f1_score(y_true, y_pred, average='macro')
-    prec = precision_score(y_true, y_pred, average=None)
-    rec = recall_score(y_true, y_pred, average=None)
+    macro_f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
+    prec = precision_score(y_true, y_pred, average=None, zero_division=0)
+    rec = recall_score(y_true, y_pred, average=None, zero_division=0)
     cm = confusion_matrix(y_true, y_pred)
-    qwk = cohen_kappa_score(y_true, y_pred, weights='quadratic')
+    qwk = cohen_kappa_score(y_true, y_pred, labels=[0, 1, 2, 3, 4], weights='quadratic')
     
     # Referable DR (Grade >= 2)
     ref_true = (y_true >= 2).astype(int)
     ref_probs = np.sum(y_pred_probs[:, 2:], axis=1)
     ref_pred = (y_pred >= 2).astype(int)
     
-    ref_sens = recall_score(ref_true, ref_pred)
+    ref_sens = recall_score(ref_true, ref_pred, zero_division=0)
     # Specificity = TN / (TN + FP)
-    tn, fp, fn, tp = confusion_matrix(ref_true, ref_pred).ravel()
+    cm_binary = confusion_matrix(ref_true, ref_pred, labels=[0, 1])
+    tn, fp, fn, tp = cm_binary.ravel()
     ref_spec = tn / (tn + fp) if (tn + fp) > 0 else 0
     ref_roc = roc_auc_score(ref_true, ref_probs)
     ref_prc = average_precision_score(ref_true, ref_probs)

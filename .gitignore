@@ -37,14 +37,7 @@ slprj/
 *.slxc
 *.mexw64
 
-# Datasets & large files
-Datasets/**/*.zip
-Datasets/**/*.tar
-Datasets/**/*.tar.gz
-Datasets/**/*.csv
-Datasets/**/*.jpg
-Datasets/**/*.png
-Datasets/**/*.jpeg
+Datasets/
 !Datasets/**/.gitkeep
 
 # Artifacts & Experiments

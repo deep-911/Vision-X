@@ -1,0 +1,20 @@
+experiment_name: mvp_baseline_softmax
+dataset:
+  name: idrid_grading
+  img_size: [224, 224]
+  batch_size: 16
+  num_workers: 0
+model:
+  name: efficientnet_b0
+  num_classes: 5
+  type: classification
+training:
+  epochs: 15
+  lr: 0.0005
+  weight_decay: 0.0001
+  mixed_precision: true
+  checkpoint_dir: artifacts/checkpoints
+  metrics_dir: artifacts/metrics
+  seed: 42
+eval:
+  referable_threshold: 2
