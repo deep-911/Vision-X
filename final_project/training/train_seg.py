@@ -30,7 +30,8 @@ def main(config_path):
         config['data']['split_json'],
         patch_size=config['data']['patch_size'],
         augment=config['data']['augment'],
-        mode='train'
+        mode='train',
+        sampling_strategy=config['data'].get('sampling_strategy', 'lesion_aware')
     )
     
     val_ds = IDRiDSegmentationDataset(

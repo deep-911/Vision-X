@@ -10,15 +10,17 @@ from albumentations.pytorch import ToTensorV2
 import random
 
 class IDRiDSegmentationDataset(Dataset):
-    def __init__(self, data_root, split, split_json_path, patch_size=(512, 512), augment=False, mode='train'):
+    def __init__(self, data_root, split, split_json_path, patch_size=(512, 512), augment=False, mode='train', sampling_strategy='lesion_aware'):
         """
         mode: 'train' (random cropping), 'val' (returns full image for sliding window), 'test' (same as val)
+        sampling_strategy: 'lesion_aware' (80% any lesion, 20% random) or 'ma_focused' (60% MA, 20% other, 20% random)
         """
         self.data_root = data_root
         self.split = split
         self.mode = mode
         self.patch_size = patch_size
         self.augment = augment
+        self.sampling_strategy = sampling_strategy
         
         self.img_dir = os.path.join(data_root, '1. Original Images', 'a. Training Set' if split in ['train', 'val'] else 'b. Testing Set')
         self.mask_dir = os.path.join(data_root, '2. All Segmentation Groundtruths', 'a. Training Set' if split in ['train', 'val'] else 'b. Testing Set')
@@ -52,6 +54,16 @@ class IDRiDSegmentationDataset(Dataset):
             ])
         else:
             self.aug_transform = None
+            
+        # Precompute valid images per class for targeted sampling
+        self.valid_images_per_class = {0: [], 1: [], 2: [], 3: []}
+        if self.mode == 'train':
+            for img_name in self.img_names:
+                for c, cls_dir, suffix in zip(range(4), self.classes, self.class_suffixes):
+                    mask_path = os.path.join(self.mask_dir, cls_dir, img_name + suffix)
+                    if os.path.exists(mask_path):
+                        # Cheap check: just assume if it exists it has pixels
+                        self.valid_images_per_class[c].append(img_name)
 
     def __len__(self):
         return len(self.img_names)
@@ -85,41 +97,86 @@ class IDRiDSegmentationDataset(Dataset):
         mask, validity = self._load_mask(base_name, (h, w))
         
         if self.mode == 'train':
-            # Patch sampling logic: 80% lesion-aware, 20% random
-            if random.random() < 0.8 and np.sum(validity) > 0:
-                # Find available lesion classes
-                available_classes = np.where(validity > 0)[0]
-                # Pick a random class to focus on
-                target_cls = random.choice(available_classes)
-                # Find positive pixels
-                pos_pixels = np.argwhere(mask[:, :, target_cls] > 0)
-                if len(pos_pixels) > 0:
-                    center_y, center_x = random.choice(pos_pixels)
-                    # Create patch around center with random offset
-                    y_min = max(0, center_y - random.randint(0, self.patch_size[0]))
-                    x_min = max(0, center_x - random.randint(0, self.patch_size[1]))
-                    
-                    # Bound checks
-                    y_min = min(y_min, h - self.patch_size[0])
-                    x_min = min(x_min, w - self.patch_size[1])
-                    
-                    y_max = y_min + self.patch_size[0]
-                    x_max = x_min + self.patch_size[1]
-                    
-                    img = img[y_min:y_max, x_min:x_max]
-                    mask = mask[y_min:y_max, x_min:x_max]
+            if self.sampling_strategy == 'ma_focused':
+                r = random.random()
+                if r < 0.6:
+                    target_cls = 0
+                elif r < 0.8:
+                    target_cls = random.choice([1, 2, 3])
                 else:
-                    # Fallback to random crop
+                    target_cls = -1
+                    
+                # If target_cls is chosen, we may need to load a different image if current one doesn't have it
+                if target_cls != -1:
+                    # check if current image has target_cls
+                    has_pixels = (validity[target_cls] > 0 and len(np.argwhere(mask[:, :, target_cls] > 0)) > 0)
+                    if not has_pixels:
+                        # sample a new image that has this class
+                        if len(self.valid_images_per_class[target_cls]) > 0:
+                            while True:
+                                new_name = random.choice(self.valid_images_per_class[target_cls])
+                                new_img_path = os.path.join(self.img_dir, new_name + '.jpg')
+                                new_img = np.array(Image.open(new_img_path))
+                                new_h, new_w = new_img.shape[:2]
+                                new_mask, new_validity = self._load_mask(new_name, (new_h, new_w))
+                                
+                                pos_pixels = np.argwhere(new_mask[:, :, target_cls] > 0)
+                                if len(pos_pixels) > 0:
+                                    img, mask, validity, base_name = new_img, new_mask, new_validity, new_name
+                                    h, w = new_h, new_w
+                                    break
+                                else:
+                                    # False positive in fast precompute (file exists but no pixels)
+                                    self.valid_images_per_class[target_cls].remove(new_name)
+                                    if len(self.valid_images_per_class[target_cls]) == 0:
+                                        target_cls = -1
+                                        break
+                        else:
+                            target_cls = -1
+                            
+                # Perform the crop
+                if target_cls != -1:
+                    pos_pixels = np.argwhere(mask[:, :, target_cls] > 0)
+                    if len(pos_pixels) > 0:
+                        center_y, center_x = random.choice(pos_pixels)
+                        y_min = max(0, center_y - random.randint(0, self.patch_size[0]))
+                        x_min = max(0, center_x - random.randint(0, self.patch_size[1]))
+                        y_min = min(y_min, h - self.patch_size[0])
+                        x_min = min(x_min, w - self.patch_size[1])
+                        img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                        mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                    else:
+                        target_cls = -1 # fallback
+                        
+                if target_cls == -1: # random background fallback
                     y_min = random.randint(0, h - self.patch_size[0])
                     x_min = random.randint(0, w - self.patch_size[1])
                     img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
                     mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
-            else:
-                # 20% Random Background Crop
-                y_min = random.randint(0, h - self.patch_size[0])
-                x_min = random.randint(0, w - self.patch_size[1])
-                img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
-                mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                    
+            else: # lesion_aware 80/20
+                if random.random() < 0.8 and np.sum(validity) > 0:
+                    available_classes = np.where(validity > 0)[0]
+                    target_cls = random.choice(available_classes)
+                    pos_pixels = np.argwhere(mask[:, :, target_cls] > 0)
+                    if len(pos_pixels) > 0:
+                        center_y, center_x = random.choice(pos_pixels)
+                        y_min = max(0, center_y - random.randint(0, self.patch_size[0]))
+                        x_min = max(0, center_x - random.randint(0, self.patch_size[1]))
+                        y_min = min(y_min, h - self.patch_size[0])
+                        x_min = min(x_min, w - self.patch_size[1])
+                        img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                        mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                    else:
+                        y_min = random.randint(0, h - self.patch_size[0])
+                        x_min = random.randint(0, w - self.patch_size[1])
+                        img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                        mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                else:
+                    y_min = random.randint(0, h - self.patch_size[0])
+                    x_min = random.randint(0, w - self.patch_size[1])
+                    img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                    mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
                 
             if self.aug_transform:
                 augmented = self.aug_transform(image=img, mask=mask)
