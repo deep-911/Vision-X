@@ -10,7 +10,7 @@ import sys
 base_dir = Path(__file__).resolve().parents[2]
 sys.path.append(str(base_dir))
 
-from mvp.data.datasets.idrid_grading import IDRiDGradingDataset
+from mvp.data.registry import get_dataset
 from mvp.models.baselines import BaselineClassification, BaselineOrdinal
 from mvp.training.loss import coral_decoding
 from mvp.evaluation.metrics import calculate_classification_metrics
@@ -28,17 +28,47 @@ def main(config_path, split, ckpt_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    split_json = base_dir / "mvp/data/splits/idrid_split_v1.json"
-    img_dir_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/a. Training Set"
-    img_dir_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/b. Testing Set"
-    labels_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/a. IDRiD_Disease Grading_Training Labels.csv"
-    labels_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/b. IDRiD_Disease Grading_Testing Labels.csv"
-    
-    img_size = tuple(config['dataset']['img_size'])
-    batch_size = config['dataset']['batch_size']
-    num_workers = config['dataset'].get('num_workers', 0)
-    
-    ds = IDRiDGradingDataset(split, split_json, img_dir_train, img_dir_test, labels_train, labels_test, img_size=img_size, augment=False)
+    if 'data' in config:
+        dataset_name = config['data']['dataset_name']
+        
+        # Override split based on config mappings if needed, else use passed split directly
+        if split == 'train':
+            actual_split = config['data'].get('train_split', 'train')
+        elif split == 'val':
+            actual_split = config['data'].get('val_split', 'val')
+        elif split == 'test':
+            actual_split = config['data'].get('holdout_split', 'test')
+        else:
+            actual_split = split
+            
+        img_size = tuple(config['data'].get('img_size', [224, 224]))
+        batch_size = config['dataset']['batch_size']
+        num_workers = config['dataset'].get('num_workers', 0)
+        
+        ds = get_dataset(dataset_name, actual_split, config, augment=False)
+    else:
+        split_json = base_dir / "mvp/data/splits/idrid_split_v1.json"
+        img_dir_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/a. Training Set"
+        img_dir_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/b. Testing Set"
+        labels_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/a. IDRiD_Disease Grading_Training Labels.csv"
+        labels_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/b. IDRiD_Disease Grading_Testing Labels.csv"
+        
+        img_size = tuple(config['dataset']['img_size'])
+        batch_size = config['dataset']['batch_size']
+        num_workers = config['dataset'].get('num_workers', 0)
+        
+        mock_config = {
+            'data': {
+                'split_json_path': str(split_json),
+                'img_dir_train': str(img_dir_train),
+                'img_dir_test': str(img_dir_test),
+                'labels_train_csv': str(labels_train),
+                'labels_test_csv': str(labels_test),
+                'img_size': img_size
+            }
+        }
+        ds = get_dataset('idrid', split, mock_config, augment=False)
+        
     loader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
     model_type = config['model']['type']

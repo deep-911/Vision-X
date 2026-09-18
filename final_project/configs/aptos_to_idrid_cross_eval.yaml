@@ -1,0 +1,31 @@
+# final_project/configs/aptos_to_idrid_cross_eval.yaml
+# Cross-dataset evaluation: APTOS trained model evaluated on IDRiD test set
+
+experiment_name: "aptos_baseline_softmax_cross_idrid"
+project: "VisionX"
+
+data:
+  dataset_name: "idrid"
+  split_json_path: "mvp/data/splits/idrid_split_v1.json"
+  img_dir_train: "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/a. Training Set"
+  img_dir_test: "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/b. Testing Set"
+  labels_train_csv: "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/a. IDRiD_Disease Grading_Training Labels.csv"
+  labels_test_csv: "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/b. IDRiD_Disease Grading_Testing Labels.csv"
+  holdout_split: "test"
+  img_size: [224, 224]
+
+dataset:
+  batch_size: 16
+  num_workers: 0
+
+model:
+  architecture: "EfficientNet-B0"
+  type: "classification"
+  num_classes: 5
+
+training:
+  metrics_dir: artifacts/metrics
+  mixed_precision: true
+
+eval:
+  referable_threshold: 2

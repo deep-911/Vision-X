@@ -14,7 +14,7 @@ import sys
 base_dir = Path(__file__).resolve().parents[2]
 sys.path.append(str(base_dir))
 
-from mvp.data.datasets.idrid_grading import IDRiDGradingDataset
+from mvp.data.registry import get_dataset
 from mvp.models.baselines import BaselineClassification, BaselineOrdinal
 from mvp.training.loss import CORALLoss, coral_decoding
 from mvp.evaluation.metrics import calculate_classification_metrics
@@ -31,18 +31,41 @@ def set_seed(seed):
     # deterministic algorithms if needed
     
 def get_loaders(config, base_dir):
-    split_json = base_dir / "mvp/data/splits/idrid_split_v1.json"
-    img_dir_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/a. Training Set"
-    img_dir_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/b. Testing Set"
-    labels_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/a. IDRiD_Disease Grading_Training Labels.csv"
-    labels_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/b. IDRiD_Disease Grading_Testing Labels.csv"
-    
-    img_size = tuple(config['dataset']['img_size'])
-    batch_size = config['dataset']['batch_size']
-    num_workers = config['dataset'].get('num_workers', 0)
-    
-    train_ds = IDRiDGradingDataset("train", split_json, img_dir_train, img_dir_test, labels_train, labels_test, img_size=img_size, augment=True)
-    val_ds = IDRiDGradingDataset("val", split_json, img_dir_train, img_dir_test, labels_train, labels_test, img_size=img_size, augment=False)
+    if 'data' in config:
+        # New generic data loading via registry
+        dataset_name = config['data']['dataset_name']
+        train_split = config['data'].get('train_split', 'train')
+        val_split = config['data'].get('val_split', 'val')
+        batch_size = config['dataset']['batch_size']
+        num_workers = config['dataset'].get('num_workers', 0)
+        
+        train_ds = get_dataset(dataset_name, train_split, config, augment=True)
+        val_ds = get_dataset(dataset_name, val_split, config, augment=False)
+    else:
+        # Legacy IDRiD hardcoded paths for MVP reproducibility
+        split_json = base_dir / "mvp/data/splits/idrid_split_v1.json"
+        img_dir_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/a. Training Set"
+        img_dir_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/1. Original Images/b. Testing Set"
+        labels_train = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/a. IDRiD_Disease Grading_Training Labels.csv"
+        labels_test = base_dir / "Datasets/IDRiD_extracted/B. Disease Grading/B. Disease Grading/2. Groundtruths/b. IDRiD_Disease Grading_Testing Labels.csv"
+        
+        img_size = tuple(config['dataset']['img_size'])
+        batch_size = config['dataset']['batch_size']
+        num_workers = config['dataset'].get('num_workers', 0)
+        
+        # We need a mock config for the registry for legacy IDRiD
+        mock_config = {
+            'data': {
+                'split_json_path': str(split_json),
+                'img_dir_train': str(img_dir_train),
+                'img_dir_test': str(img_dir_test),
+                'labels_train_csv': str(labels_train),
+                'labels_test_csv': str(labels_test),
+                'img_size': img_size
+            }
+        }
+        train_ds = get_dataset('idrid', 'train', mock_config, augment=True)
+        val_ds = get_dataset('idrid', 'val', mock_config, augment=False)
     
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
@@ -72,7 +95,26 @@ def main(config_path):
     
     if model_type == 'classification':
         model = BaselineClassification(num_classes=num_classes).to(device)
-        criterion = nn.CrossEntropyLoss()
+        class_weights = None
+        if config.get('data', {}).get('imbalance_strategy') == 'class_weights':
+            try:
+                import numpy as np
+                if hasattr(train_loader.dataset, 'df') and hasattr(train_loader.dataset, 'label_col'):
+                    labels = train_loader.dataset.df[train_loader.dataset.label_col].values
+                elif hasattr(train_loader.dataset, 'df_train'):
+                    labels = train_loader.dataset.df_train['Retinopathy grade'].values
+                else:
+                    labels = []
+                
+                if len(labels) > 0:
+                    class_counts = np.bincount(labels)
+                    weights = len(labels) / (len(class_counts) * class_counts)
+                    class_weights = torch.FloatTensor(weights).to(device)
+                    print(f"Applying class weights: {class_weights}")
+            except Exception as e:
+                print(f"Failed to calculate class weights: {e}")
+                
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
     elif model_type == 'ordinal':
         model = BaselineOrdinal(num_classes=num_classes).to(device)
         criterion = CORALLoss()

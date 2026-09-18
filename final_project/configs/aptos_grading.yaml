@@ -1,6 +1,7 @@
 # final_project/configs/aptos_grading.yaml
 # APTOS 2019 Base Reference Model (EfficientNet-B0 + Softmax)
 
+experiment_name: "aptos_baseline_softmax"
 project: "VisionX"
 task: "5-class DR grading"
 
@@ -12,16 +13,12 @@ data:
   holdout_split: "test" # Internal holdout, MUST remain locked
   img_size: [224, 224]
   augment: true
-  # Class imbalance strategy (e.g., class_weights, focal_loss, oversampling)
   imbalance_strategy: "class_weights"
 
-training:
-  seed: 42
-  epochs: 15
+dataset:
+  img_size: [224, 224]
   batch_size: 16
-  amp: true
-  checkpoint_rule: "max_val_qwk"
-  metrics: ["qwk", "accuracy", "referable_sensitivity", "referable_specificity", "brier_score"]
+  num_workers: 0
 
 model:
   architecture: "EfficientNet-B0"
@@ -29,11 +26,16 @@ model:
   num_classes: 5
   pretrained_weights: "EfficientNet_B0_Weights.DEFAULT"
 
-optimizer:
-  name: "AdamW"
+training:
+  seed: 42
+  epochs: 15
   lr: 0.0005
   weight_decay: 0.0001
+  mixed_precision: true
+  checkpoint_rule: "max_val_qwk"
+  checkpoint_dir: artifacts/checkpoints
+  metrics_dir: artifacts/metrics
+  metrics: ["qwk", "accuracy", "referable_sensitivity", "referable_specificity", "brier_score"]
 
-scheduler:
-  name: "CosineAnnealingLR" # Placeholder, adjust later if needed
-  T_max: 15
+eval:
+  referable_threshold: 2
