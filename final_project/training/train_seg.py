@@ -13,6 +13,7 @@ sys.path.append(str(base_dir))
 
 from final_project.data.idrid_segmentation import IDRiDSegmentationDataset
 from final_project.models.segformer import SegformerMultiLabel
+from final_project.models.unet import get_unet_model
 from final_project.training.losses import DiceBCELoss
 
 def main(config_path):
@@ -46,7 +47,12 @@ def main(config_path):
     val_loader = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=config['dataset']['num_workers'])
 
     # Model
-    model = SegformerMultiLabel(num_classes=config['model']['num_classes']).to(device)
+    if config['model']['architecture'] == 'SegFormer-B2':
+        model = SegformerMultiLabel(num_classes=config['model']['num_classes']).to(device)
+    elif config['model']['architecture'] == 'U-Net':
+        model = get_unet_model(encoder_name=config['model'].get('encoder_name', 'efficientnet-b0'), num_classes=config['model']['num_classes']).to(device)
+    else:
+        raise ValueError(f"Unknown architecture {config['model']['architecture']}")
     
     # Optimizer & Loss
     optimizer = optim.AdamW(model.parameters(), lr=config['training']['lr'])

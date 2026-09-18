@@ -14,6 +14,7 @@ sys.path.append(str(base_dir))
 
 from final_project.data.idrid_segmentation import IDRiDSegmentationDataset
 from final_project.models.segformer import SegformerMultiLabel
+from final_project.models.unet import get_unet_model
 
 def evaluate(config_path, checkpoint_path, split='val'):
     with open(config_path, 'r') as f:
@@ -33,7 +34,13 @@ def evaluate(config_path, checkpoint_path, split='val'):
     loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=config['dataset']['num_workers'])
 
     # Model
-    model = SegformerMultiLabel(num_classes=config['model']['num_classes']).to(device)
+    if config['model']['architecture'] == 'SegFormer-B2':
+        model = SegformerMultiLabel(num_classes=config['model']['num_classes']).to(device)
+    elif config['model']['architecture'] == 'U-Net':
+        model = get_unet_model(encoder_name=config['model'].get('encoder_name', 'efficientnet-b0'), num_classes=config['model']['num_classes']).to(device)
+    else:
+        raise ValueError(f"Unknown architecture {config['model']['architecture']}")
+        
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model.eval()
     
