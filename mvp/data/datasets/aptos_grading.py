@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 
 class AptosGradingDataset(Dataset):
-    def __init__(self, split_name, dataset_root, img_size=(224, 224), augment=False):
+    def __init__(self, split_name, dataset_root, img_size=(224, 224), augment=False, config=None):
         """
         split_name: 'train', 'val', or 'test'
         dataset_root: Path to the raw_aptos directory
@@ -40,15 +40,26 @@ class AptosGradingDataset(Dataset):
         
         # Define transforms
         if augment and split_name == 'train':
-            self.transform = T.Compose([
-                T.Resize(img_size),
-                T.RandomHorizontalFlip(),
-                T.RandomVerticalFlip(),
-                T.RandomRotation(15),
-                T.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            ])
+            augment_type = config.get('data', {}).get('augment_type', 'default') if config else 'default'
+            if augment_type == 'robust':
+                self.transform = T.Compose([
+                    T.Resize(img_size),
+                    T.RandomHorizontalFlip(),
+                    T.RandomRotation(15),
+                    T.ColorJitter(brightness=0.2, contrast=0.2),
+                    T.ToTensor(),
+                    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                ])
+            else:
+                self.transform = T.Compose([
+                    T.Resize(img_size),
+                    T.RandomHorizontalFlip(),
+                    T.RandomVerticalFlip(),
+                    T.RandomRotation(15),
+                    T.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
+                    T.ToTensor(),
+                    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                ])
         else:
             self.transform = T.Compose([
                 T.Resize(img_size),

@@ -1,7 +1,5 @@
 # final_project/configs/aptos_to_idrid_cross_eval.yaml
-# Cross-dataset evaluation: APTOS trained model evaluated on IDRiD test set
-
-experiment_name: "aptos_baseline_softmax_cross_idrid"
+experiment_name: "aptos_baseline_softmax_robust_aug_cross_idrid"
 project: "VisionX"
 
 data:
@@ -28,4 +26,5 @@ training:
   mixed_precision: true
 
 eval:
-  referable_threshold: 2
+  referable_threshold: 0.8687
+  temperature: 1.1914

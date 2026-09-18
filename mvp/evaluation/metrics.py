@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, cohen_kappa_score, roc_auc_score, average_precision_score, brier_score_loss
 
-def calculate_classification_metrics(y_true, y_pred_probs):
+def calculate_classification_metrics(y_true, y_pred_probs, threshold=2):
     y_pred = np.argmax(y_pred_probs, axis=1)
     
     # 5-class metrics
@@ -16,7 +16,11 @@ def calculate_classification_metrics(y_true, y_pred_probs):
     # Referable DR (Grade >= 2)
     ref_true = (y_true >= 2).astype(int)
     ref_probs = np.sum(y_pred_probs[:, 2:], axis=1)
-    ref_pred = (y_pred >= 2).astype(int)
+    
+    if isinstance(threshold, float):
+        ref_pred = (ref_probs >= threshold).astype(int)
+    else:
+        ref_pred = (y_pred >= threshold).astype(int)
     
     ref_sens = recall_score(ref_true, ref_pred, zero_division=0)
     # Specificity = TN / (TN + FP)

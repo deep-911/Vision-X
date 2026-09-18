@@ -2,6 +2,7 @@ import argparse
 import yaml
 import json
 import torch
+import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from pathlib import Path
@@ -88,9 +89,13 @@ def main(config_path, split, ckpt_path):
     with torch.no_grad():
         for imgs, labels, _ in loader:
             imgs, labels = imgs.to(device), labels.to(device)
-            
             with torch.amp.autocast('cuda', enabled=config['training']['mixed_precision']):
                 logits = model(imgs)
+                
+                # Apply temperature scaling if present
+                temperature = config.get('eval', {}).get('temperature', 1.0)
+                if temperature != 1.0:
+                    logits = logits / temperature
                 
             if model_type == 'classification':
                 probas = torch.softmax(logits, dim=1)
@@ -102,11 +107,11 @@ def main(config_path, split, ckpt_path):
             all_preds.append(probas.cpu().numpy())
             all_labels.append(labels.cpu().numpy())
             
-    import numpy as np
     all_preds = np.vstack(all_preds)
     all_labels = np.concatenate(all_labels)
     
-    metrics = calculate_classification_metrics(all_labels, all_preds)
+    threshold = config.get('eval', {}).get('referable_threshold', 2)
+    metrics = calculate_classification_metrics(all_labels, all_preds, threshold=threshold)
     
     out_dir = base_dir / config['training']['metrics_dir'] / config['experiment_name']
     out_dir.mkdir(parents=True, exist_ok=True)

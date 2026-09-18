@@ -126,22 +126,29 @@ def main(config_path):
     
     best_val_qwk = -1.0
     
+    accumulation_steps = config['training'].get('accumulation_steps', 1)
+    
     start_time = time.time()
     
     for epoch in range(config['training']['epochs']):
         model.train()
         train_loss = 0.0
-        for imgs, labels, _ in train_loader:
+        optimizer.zero_grad()
+        
+        for i, (imgs, labels, _) in enumerate(train_loader):
             imgs, labels = imgs.to(device), labels.to(device)
             
-            optimizer.zero_grad()
             with torch.amp.autocast('cuda', enabled=config['training']['mixed_precision']):
                 logits = model(imgs)
                 loss = criterion(logits, labels)
+                loss_scaled = loss / accumulation_steps
                 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            scaler.scale(loss_scaled).backward()
+            
+            if (i + 1) % accumulation_steps == 0 or (i + 1) == len(train_loader):
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
             
             train_loss += loss.item() * imgs.size(0)
             

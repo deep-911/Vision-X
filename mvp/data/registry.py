@@ -21,7 +21,8 @@ def get_dataset(dataset_name, split_name, config, augment=False):
             split_name=split_name,
             dataset_root=config['data']['dataset_root'],
             img_size=tuple(config['data'].get('img_size', [224, 224])),
-            augment=augment
+            augment=augment,
+            config=config
         )
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
