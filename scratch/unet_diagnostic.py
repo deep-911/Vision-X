@@ -27,7 +27,7 @@ if os.path.exists(out_dir / "diagnostic_report.txt"):
     os.remove(out_dir / "diagnostic_report.txt")
 
 def main():
-    config_path = base_dir / "final_project/configs/idrid_unet_effb0_ma_sampling.yaml"
+    config_path = base_dir / "final_project/configs/idrid_unet_effb0_ma_loss.yaml"
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
@@ -157,7 +157,7 @@ def main():
                     
         return metrics_per_thresh
         
-    best_ckpt = base_dir / "artifacts/checkpoints/idrid_unet_effb0_ma_sampling/best.pt"
+    best_ckpt = base_dir / "artifacts/checkpoints/idrid_unet_effb0_ma_loss/best.pt"
     
     p("=== UNET PER-CLASS THRESHOLD SWEEP (best.pt) ===")
     metrics_thresh = evaluate_checkpoint(best_ckpt, do_qualitative=True)

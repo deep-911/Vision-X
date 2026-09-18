@@ -14,7 +14,7 @@ sys.path.append(str(base_dir))
 from final_project.data.idrid_segmentation import IDRiDSegmentationDataset
 from final_project.models.segformer import SegformerMultiLabel
 from final_project.models.unet import get_unet_model
-from final_project.training.losses import DiceBCELoss
+from final_project.training.losses import DiceBCELoss, WeightedFocalDiceLoss
 
 def main(config_path):
     with open(config_path, 'r') as f:
@@ -57,7 +57,17 @@ def main(config_path):
     
     # Optimizer & Loss
     optimizer = optim.AdamW(model.parameters(), lr=config['training']['lr'])
-    criterion = DiceBCELoss()
+    
+    loss_cfg = config['training'].get('loss', {})
+    if loss_cfg.get('name') == 'WeightedFocalDiceLoss':
+        criterion = WeightedFocalDiceLoss(
+            gamma=loss_cfg.get('gamma', 2.0),
+            alpha=loss_cfg.get('alpha', 0.25),
+            class_weights=loss_cfg.get('class_weights')
+        )
+    else:
+        criterion = DiceBCELoss()
+        
     scaler = torch.amp.GradScaler('cuda', enabled=config['training']['mixed_precision'])
     
     accumulation_steps = config['training'].get('gradient_accumulation_steps', 1)
