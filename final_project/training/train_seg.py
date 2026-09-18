@@ -59,7 +59,7 @@ def main(config_path):
     ckpt_dir = base_dir / "artifacts/checkpoints" / config['experiment_name']
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     
-    best_val_loss = float('inf')
+    best_val_dice = -1.0
 
     # Training Loop
     epochs = config['training']['epochs']
@@ -95,11 +95,11 @@ def main(config_path):
         # Validation
         model.eval()
         val_loss = 0.0
+        val_dice_sum = 0.0
+        val_dice_count = 0
         
         with torch.no_grad():
             for imgs, masks, validities, names in val_loader:
-                # Valid sliding window emulation: just evaluating loss on random 512 patches for speed
-                # Actually, eval_seg.py does full reconstruction. Here we just take a center crop to track val loss cheaply.
                 h, w = imgs.shape[2], imgs.shape[3]
                 cy, cx = h//2, w//2
                 ps = 512
@@ -112,17 +112,32 @@ def main(config_path):
                     loss = criterion(logits, masks_crop, validities)
                 val_loss += loss.item()
                 
+                probs = torch.sigmoid(logits)
+                preds = (probs > 0.5).float()
+                
+                # Compute macro dice for valid classes in this batch
+                for b in range(preds.size(0)):
+                    for c in range(preds.size(1)):
+                        if validities[b, c] > 0:
+                            p = preds[b, c]
+                            g = masks_crop[b, c]
+                            inter = (p * g).sum()
+                            dice = (2.0 * inter) / (p.sum() + g.sum() + 1e-6)
+                            val_dice_sum += dice.item()
+                            val_dice_count += 1
+                
         val_loss /= len(val_loader)
+        epoch_macro_dice = val_dice_sum / max(val_dice_count, 1)
         
-        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val CenterCrop Loss: {val_loss:.4f}")
+        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val CenterCrop Loss: {val_loss:.4f} - Val Macro Dice: {epoch_macro_dice:.4f}")
         
         # Save latest
         torch.save(model.state_dict(), ckpt_dir / "latest.pt")
         
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if epoch_macro_dice > best_val_dice:
+            best_val_dice = epoch_macro_dice
             torch.save(model.state_dict(), ckpt_dir / "best.pt")
-            print("  --> Saved new best checkpoint!")
+            print("  --> Saved new best checkpoint (Dice)!")
 
 if __name__ == "__main__":
     import argparse

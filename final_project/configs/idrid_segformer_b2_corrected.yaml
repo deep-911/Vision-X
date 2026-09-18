@@ -1,0 +1,24 @@
+experiment_name: "idrid_segformer_b2_corrected"
+project: "VisionX"
+task: "IDRiD Lesion Segmentation"
+
+data:
+  dataset_root: "Datasets/IDRiD_extracted/A. Segmentation/A. Segmentation"
+  split_json: "final_project/data/splits/idrid_seg_split.json"
+  patch_size: [512, 512]
+  augment: true
+
+dataset:
+  batch_size: 2
+  num_workers: 0
+
+model:
+  architecture: "SegFormer-B2"
+  num_classes: 4
+
+training:
+  seed: 42
+  epochs: 30
+  lr: 0.0001
+  mixed_precision: true
+  gradient_accumulation_steps: 4
