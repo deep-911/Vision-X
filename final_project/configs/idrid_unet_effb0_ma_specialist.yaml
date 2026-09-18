@@ -1,0 +1,27 @@
+experiment_name: "idrid_unet_effb0_ma_specialist"
+project: "VisionX"
+task: "IDRiD Lesion Segmentation - MA Binary Specialist"
+
+data:
+  dataset_root: "Datasets/IDRiD_extracted/A. Segmentation/A. Segmentation"
+  split_json: "final_project/data/splits/idrid_seg_split.json"
+  patch_size: [512, 512]
+  augment: true
+
+dataset:
+  batch_size: 2
+  num_workers: 0
+
+model:
+  architecture: "U-Net"
+  encoder_name: "efficientnet-b0"
+  num_classes: 1 # Binary MA
+
+training:
+  seed: 42
+  epochs: 30
+  lr: 0.0001
+  mixed_precision: true
+  gradient_accumulation_steps: 4
+  loss:
+    name: "DiceBCELoss"
