@@ -66,7 +66,7 @@ class IDRiDSegmentationDataset(Dataset):
                 m = np.array(Image.open(mask_path))
                 if len(m.shape) > 2:
                     m = m[:, :, 0] # sometimes they are saved as RGB
-                m = (m > 127).astype(np.float32)
+                m = (m > 0).astype(np.float32)
                 masks.append(m)
                 validity.append(1.0)
             else:
