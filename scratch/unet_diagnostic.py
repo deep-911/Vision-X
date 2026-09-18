@@ -27,7 +27,7 @@ if os.path.exists(out_dir / "diagnostic_report.txt"):
     os.remove(out_dir / "diagnostic_report.txt")
 
 def main():
-    config_path = base_dir / "final_project/configs/idrid_unet_effb0_ma_loss.yaml"
+    config_path = base_dir / "final_project/configs/idrid_unet_effb0_ma_magnified.yaml"
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
@@ -49,9 +49,16 @@ def main():
         model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=True))
         model.eval()
         
-        patch_size = 512
-        overlap = 256
-        stride = patch_size - overlap
+        sampling_strategy = config['data'].get('sampling_strategy', 'lesion_aware')
+        if sampling_strategy == 'ma_magnified':
+            native_patch_size = 256
+            model_input_size = 512
+        else:
+            native_patch_size = 512
+            model_input_size = 512
+            
+        overlap = native_patch_size // 2
+        stride = native_patch_size - overlap
         
         metrics_per_thresh = {t: {c: {'tp':0, 'fp':0, 'fn':0, 'tn':0, 'intersection':0, 'union':0, 'valid_imgs':0} for c in class_keys} for t in thresholds}
         
@@ -66,25 +73,43 @@ def main():
                 
                 _, full_h, full_w = img.shape
                 
-                y_starts = list(range(0, full_h - patch_size + 1, stride))
-                if y_starts[-1] + patch_size < full_h:
-                    y_starts.append(full_h - patch_size)
+                import cv2
+                y_starts = list(range(0, full_h - native_patch_size + 1, stride))
+                if y_starts[-1] + native_patch_size < full_h:
+                    y_starts.append(full_h - native_patch_size)
                     
-                x_starts = list(range(0, full_w - patch_size + 1, stride))
-                if x_starts[-1] + patch_size < full_w:
-                    x_starts.append(full_w - patch_size)
+                x_starts = list(range(0, full_w - native_patch_size + 1, stride))
+                if x_starts[-1] + native_patch_size < full_w:
+                    x_starts.append(full_w - native_patch_size)
                     
                 full_pred = torch.zeros(4, full_h, full_w, device=device)
                 count_map = torch.zeros(4, full_h, full_w, device=device)
                 
                 for y in y_starts:
                     for x in x_starts:
-                        patch = img[:, y:y+patch_size, x:x+patch_size].unsqueeze(0).to(device)
-                        with torch.amp.autocast('cuda'):
+                        patch = img[:, y:y+native_patch_size, x:x+native_patch_size]
+                        
+                        if native_patch_size != model_input_size:
+                            patch_np = patch.permute(1, 2, 0).cpu().numpy()
+                            patch_resized = cv2.resize(patch_np, (model_input_size, model_input_size), interpolation=cv2.INTER_LINEAR)
+                            patch = torch.from_numpy(patch_resized).permute(2, 0, 1).to(device)
+                        else:
+                            patch = patch.to(device)
+                            
+                        patch = patch.unsqueeze(0)
+                        with torch.amp.autocast('cuda', enabled=config['training']['mixed_precision']):
                             logits = model(patch)
-                        probs = torch.sigmoid(logits)[0]
-                        full_pred[:, y:y+patch_size, x:x+patch_size] += probs
-                        count_map[:, y:y+patch_size, x:x+patch_size] += 1
+                        probs = torch.sigmoid(logits)[0] # [4, out_H, out_W]
+                        
+                        if native_patch_size != model_input_size:
+                            probs_np = probs.cpu().numpy().transpose(1, 2, 0).astype(np.float32)
+                            probs_resized = np.zeros((native_patch_size, native_patch_size, 4), dtype=np.float32)
+                            for c in range(4):
+                                probs_resized[:, :, c] = cv2.resize(probs_np[:, :, c], (native_patch_size, native_patch_size), interpolation=cv2.INTER_LINEAR)
+                            probs = torch.from_numpy(probs_resized).permute(2, 0, 1).to(device)
+                        
+                        full_pred[:, y:y+native_patch_size, x:x+native_patch_size] += probs
+                        count_map[:, y:y+native_patch_size, x:x+native_patch_size] += 1
                         
                 full_prob = (full_pred / count_map).cpu().numpy()
                 gt_mask = mask.numpy()
@@ -157,7 +182,7 @@ def main():
                     
         return metrics_per_thresh
         
-    best_ckpt = base_dir / "artifacts/checkpoints/idrid_unet_effb0_ma_loss/best.pt"
+    best_ckpt = base_dir / "artifacts/checkpoints/idrid_unet_effb0_ma_magnified/best.pt"
     
     p("=== UNET PER-CLASS THRESHOLD SWEEP (best.pt) ===")
     metrics_thresh = evaluate_checkpoint(best_ckpt, do_qualitative=True)

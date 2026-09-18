@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import cv2
 import random
 
 class IDRiDSegmentationDataset(Dataset):
@@ -153,6 +154,64 @@ class IDRiDSegmentationDataset(Dataset):
                     x_min = random.randint(0, w - self.patch_size[1])
                     img = img[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
                     mask = mask[y_min:y_min+self.patch_size[0], x_min:x_min+self.patch_size[1]]
+                    
+            elif self.sampling_strategy == 'ma_magnified':
+                # 80% MA, 20% random background
+                # Native crop size is 256x256
+                native_crop = 256
+                target_cls = 0 if random.random() < 0.8 else -1
+                
+                if target_cls == 0:
+                    has_pixels = (validity[0] > 0 and len(np.argwhere(mask[:, :, 0] > 0)) > 0)
+                    if not has_pixels:
+                        if len(self.valid_images_per_class[0]) > 0:
+                            while True:
+                                new_name = random.choice(self.valid_images_per_class[0])
+                                new_img_path = os.path.join(self.img_dir, new_name + '.jpg')
+                                new_img = np.array(Image.open(new_img_path))
+                                new_h, new_w = new_img.shape[:2]
+                                new_mask, new_validity = self._load_mask(new_name, (new_h, new_w))
+                                
+                                pos_pixels = np.argwhere(new_mask[:, :, 0] > 0)
+                                if len(pos_pixels) > 0:
+                                    img, mask, validity, base_name = new_img, new_mask, new_validity, new_name
+                                    h, w = new_h, new_w
+                                    break
+                                else:
+                                    self.valid_images_per_class[0].remove(new_name)
+                                    if len(self.valid_images_per_class[0]) == 0:
+                                        target_cls = -1
+                                        break
+                        else:
+                            target_cls = -1
+                            
+                if target_cls == 0:
+                    pos_pixels = np.argwhere(mask[:, :, 0] > 0)
+                    if len(pos_pixels) > 0:
+                        center_y, center_x = random.choice(pos_pixels)
+                        y_min = max(0, center_y - random.randint(0, native_crop))
+                        x_min = max(0, center_x - random.randint(0, native_crop))
+                        y_min = min(y_min, h - native_crop)
+                        x_min = min(x_min, w - native_crop)
+                        img = img[y_min:y_min+native_crop, x_min:x_min+native_crop]
+                        mask = mask[y_min:y_min+native_crop, x_min:x_min+native_crop]
+                    else:
+                        target_cls = -1
+                        
+                if target_cls == -1: # random fallback
+                    y_min = random.randint(0, h - native_crop)
+                    x_min = random.randint(0, w - native_crop)
+                    img = img[y_min:y_min+native_crop, x_min:x_min+native_crop]
+                    mask = mask[y_min:y_min+native_crop, x_min:x_min+native_crop]
+                    
+                # Resize from 256x256 to 512x512 (patch_size)
+                # Image uses INTER_LINEAR, mask uses NEAREST
+                img = cv2.resize(img, (self.patch_size[1], self.patch_size[0]), interpolation=cv2.INTER_LINEAR)
+                # mask is multi-channel [H, W, C]
+                mask_resized = np.zeros((self.patch_size[0], self.patch_size[1], 4), dtype=np.float32)
+                for c in range(4):
+                    mask_resized[:, :, c] = cv2.resize(mask[:, :, c], (self.patch_size[1], self.patch_size[0]), interpolation=cv2.INTER_NEAREST)
+                mask = mask_resized
                     
             else: # lesion_aware 80/20
                 if random.random() < 0.8 and np.sum(validity) > 0:
