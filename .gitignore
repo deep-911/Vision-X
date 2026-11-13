@@ -1,0 +1,117 @@
+# ==============================================================================
+# VisionX Git Ignore Rules
+# ==============================================================================
+.agents/
+# Python Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# C/C++ extensions
+*.obj
+*.o
+*.a
+*.lib
+*.pyd
+
+# Distribution / packaging
+dist/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment and Secrets
+.env
+.env.*
+!.env.example
+
+# Datasets and Large Data
+Datasets/
+data/raw/
+data/processed/
+!data/demo_samples/
+data/runtime/*.db
+!data/runtime/.gitkeep
+
+# Archive directory (preserves historical experiments & scratch on disk)
+archive/
+.agents/
+
+# Markdown documentation (only README.md is tracked on GitHub)
+*.md
+!README.md
+!LICENSE
+
+
+# Artifacts & Checkpoints
+artifacts/
+artifacts/logs/
+
+# PyTorch, ONNX & Model Checkpoints
+*.pt
+*.pth
+*.onnx
+*.bin
+models/production/*.pt
+models/production/*.pth
+!models/production/.gitkeep
+!models/README.md
+
+# MATLAB & Simulink
+*.asv
+*.m~
+*.mat
+slprj/
+*.slxc
+*.mexw64
+
+# Testing & HTTP Clients
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System Files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE & Editor caches
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

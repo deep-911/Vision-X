@@ -1,0 +1,32 @@
+# Vision-X Production Deployment Dependencies (FastAPI + Inference Service)
+# Minimal, robust, production-oriented (avoids heavy training-only packages)
+
+# Web & API Framework
+fastapi>=0.109.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+pydantic>=2.5.0,<3.0.0
+python-multipart>=0.0.9
+
+# Security & Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
+PyJWT>=2.8.0
+
+# Database
+motor>=3.3.0
+# Note: sqlite3 is built into the Python standard library
+
+# Deep Learning & Computer Vision (Optimized CPU runtime)
+torch>=2.0.0
+torchvision>=0.15.0
+pillow>=10.0.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0,<3.0.0
+scipy>=1.11.0
+matplotlib>=3.8.0
+
+# Testing & HTTP Clients
+requests>=2.31.0
+httpx>=0.26.0
+pytest>=8.0.0
